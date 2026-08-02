@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Host Connection Terminal</title>
+  <!-- Google Fonts for Monospace Cyber Text & Warm Festive Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Reset & Base Variables */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    :root {
+      --bg-color: #0b0c10;
+      --primary-color: #1f4e1f; /* Matrix Green Dark */
+      --terminal-green: #00ff66;
+      --terminal-dim: #00aa44;
+      --alert-color: #ff3333;
+      --alert-dim: #771111;
+      
+      /* Celebration Theme Grains & Gradients */
+      --glow-color: rgba(0, 255, 102, 0.05);
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-sans: 'Outfit', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--terminal-green);
+      font-family: var(--font-mono);
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      position: relative;
+      user-select: none;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 1.5s ease-in-out;
+    }
+
+    /* Ambient Lighting Follow Mouse */
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: radial-gradient(600px circle at var(--mouse-x, -1000px) var(--mouse-y, -1000px), var(--glow-color), transparent 45%);
+      z-index: 5;
+    }
+
+    /* Background Canvas */
+    canvas#backgroundCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Scanline & CRT Effect overlays */
+    .crt-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.15;
+    }
+
+    /* Screen Shake Utility */
+    .shake-anim {
+      animation: screenShake 0.15s infinite alternate;
+    }
+    
+    @keyframes screenShake {
+      0% { transform: translate(2px, 1px) rotate(0deg); }
+      10% { transform: translate(-1px, -2px) rotate(-1deg); }
+      20% { transform: translate(-3px, 0px) rotate(1deg); }
+      30% { transform: translate(0px, 2px) rotate(0deg); }
+      40% { transform: translate(1px, -1px) rotate(1deg); }
+      50% { transform: translate(-1px, 2px) rotate(-1deg); }
+      60% { transform: translate(-3px, 1px) rotate(0deg); }
+      70% { transform: translate(2px, 1px) rotate(-1deg); }
+      80% { transform: translate(-1px, -1px) rotate(1deg); }
+      90% { transform: translate(2px, 2px) rotate(0deg); }
+      100% { transform: translate(1px, -2px) rotate(-1deg); }
+    }
+
+    /* Main Container */
+    .app-viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Utility Hidden Class */
+    .hidden {
+      display: none !important;
+    }
+
+    /* ----------------------------------------------------
+       SCENE STYLE SHEETS
+       ---------------------------------------------------- */
+
+    /* Splash Screen Style */
+    .splash-container {
+      background: rgba(10, 15, 12, 0.75);
+      border: 1px solid rgba(0, 255, 102, 0.2);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 102, 0.1);
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+      animation: fadeInSmooth 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      position: relative;
+    }
+
+    .system-badge {
+      display: inline-block;
+      border: 1px solid var(--terminal-green);
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 3px;
+      margin-bottom: 20px;
+      letter-spacing: 2px;
+      text-shadow: 0 0 5px var(--terminal-green);
+      background: rgba(0, 255, 102, 0.05);
+    }
+
+    .splash-title {
+      font-weight: 700;
+      font-size: 24px;
+      margin-bottom: 15px;
+      color: #fff;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+      letter-spacing: 1px;
+    }
+
+    .splash-description {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+
+    .checkbox-label {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 12px 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.25s ease;
+      font-size: 13px;
+      color: #ccc;
+    }
+    
+    .checkbox-label:hover {
+      background: rgba(0, 255, 102, 0.04);
+      border-color: rgba(0, 255, 102, 0.2);
+    }
+    
+    .checkbox-label input {
+      accent-color: var(--terminal-green);
+      width: 16px;
+      height: 16px;
+    }
+
+    .cyber-btn {
+      display: inline-block;
+      width: 100%;
+      background: linear-gradient(135deg, #009944, #00ff66);
+      color: #000;
+      border: none;
+      padding: 16px 20px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(0, 255, 102, 0.2), 0 0 20px rgba(0, 255, 102, 0.1);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .cyber-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 255, 102, 0.4), 0 0 30px rgba(0, 255, 102, 0.2);
+    }
+
+    .cyber-btn:active {
+      transform: translateY(1px);
+    }
+
+    /* Screen 1 / 2 Terminal Window */
+    .terminal-window {
+      width: 90%;
+      max-width: 800px;
+      background: rgba(5, 8, 6, 0.9);
+      border: 1px solid rgba(0, 255, 102, 0.25);
+      border-radius: 8px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 255, 102, 0.05);
+      backdrop-filter: blur(8px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 480px;
+      animation: scaleInSmooth 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .terminal-bar {
+      background: rgba(0, 255, 102, 0.05);
+      border-bottom: 1px solid rgba(0, 255, 102, 0.15);
+      padding: 10px 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(0, 255, 102, 0.15);
+    }
+    
+    .terminal-dot:nth-child(1) { background: #ff5f56; opacity: 0.8; }
+    .terminal-dot:nth-child(2) { background: #ffbd2e; opacity: 0.8; }
+    .terminal-dot:nth-child(3) { background: #27c93f; opacity: 0.8; }
+
+    .terminal-title {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .terminal-body {
+      padding: 20px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* Scrollbar Styling for Terminal */
+    .terminal-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .terminal-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .terminal-body::-webkit-scrollbar-thumb {
+      background: rgba(0, 255, 102, 0.2);
+      border-radius: 3px;
+    }
+
+    /* Cursor animation */
+    .cursor::after {
+      content: '█';
+      animation: blinkCursor 0.8s step-end infinite;
+      margin-left: 5px;
+    }
+    
+    @keyframes blinkCursor {
+      50% { opacity: 0; }
+    }
+
+    /* Fake Progress Bar */
+    .progress-wrapper {
+      margin-top: 15px;
+      margin-bottom: 5px;
+    }
+    
+    .progress-bar-outer {
+      width: 100%;
+      height: 20px;
+      background: rgba(0, 255, 102, 0.05);
+      border: 1px solid rgba(0, 255, 102, 0.25);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-inner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00aa44, #00ff66);
+      transition: width 0.1s linear;
+      box-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
+    }
+
+    .progress-text {
+      font-size: 12px;
+      margin-top: 5px;
+      display: flex;
+      justify-content: space-between;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    /* Countdown Scene */
+    .countdown-container {
+      text-align: center;
+      animation: fadeInSmooth 0.3s ease-out;
+      background: rgba(15, 5, 5, 0.9);
+      border: 2px solid var(--alert-color);
+      border-radius: 12px;
+      padding: 50px 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 0 40px rgba(255, 51, 51, 0.15);
+      z-index: 100;
+    }
+
+    .warning-lbl {
+      color: var(--alert-color);
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      animation: pulseAlert 0.5s ease-in-out infinite alternate;
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px rgba(255, 51, 51, 0.4);
+    }
+
+    @keyframes pulseAlert {
+      0% { opacity: 0.6; transform: scale(0.98); }
+      100% { opacity: 1; transform: scale(1.02); }
+    }
+
+    .countdown-sub {
+      color: #fff;
+      font-size: 15px;
+      margin-bottom: 5px;
+      opacity: 0.8;
+    }
+    
+    .countdown-detail {
+      font-size: 12px;
+      color: var(--alert-color);
+      margin-bottom: 30px;
+      opacity: 0.7;
+    }
+
+    .countdown-number {
+      font-size: 110px;
+      font-weight: 900;
+      color: var(--alert-color);
+      line-height: 1;
+      text-shadow: 0 0 20px rgba(255, 51, 51, 0.6);
+      animation: scaleBeat 1s ease-in-out infinite;
+    }
+
+    @keyframes scaleBeat {
+      0% { transform: scale(1); }
+      20% { transform: scale(1.15); }
+      40% { transform: scale(1); }
+    }
+
+    /* Screen Glitch Strip Event Elements */
+    .glitch-stripe {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 30px;
+      background: rgba(255, 51, 51, 0.2);
+      border-top: 1px solid rgba(255, 51, 51, 0.5);
+      border-bottom: 1px solid rgba(255, 51, 51, 0.5);
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0.8;
+      display: none;
+    }
+
+    /* Big Got You Screen */
+    .got-you-box {
+      text-align: center;
+      animation: enterGlitch 0.2s steps(2) infinite;
+    }
+
+    /* Text Glitch Effect */
+    .glitch-header {
+      font-size: 72px;
+      font-weight: 900;
+      color: #fff;
+      position: relative;
+      display: inline-block;
+      text-transform: uppercase;
+      letter-spacing: 5px;
+      text-shadow: 2px 0 0 #ff0055, -2px 0 0 #00ff66;
+    }
+
+    @keyframes enterGlitch {
+      0% { transform: translate(1px, -2px) skewX(2deg); filter: hue-rotate(90deg); }
+      25% { transform: translate(-2px, 2px) skewX(-1deg); filter: hue-rotate(180deg); }
+      50% { transform: translate(3px, 1px) skewX(5deg); filter: grayscale(1); }
+      75% { transform: translate(-1px, -1px) skewX(-2deg); filter: saturate(3); }
+    }
+
+    /* ----------------------------------------------------
+       SCENE 5 - WARM CELEBRATION REVEAL
+       ---------------------------------------------------- */
+    .celebration-container {
+      width: 90%;
+      max-width: 580px;
+      z-index: 20;
+      text-align: center;
+      perspective: 1000px;
+    }
+
+    .glass-card {
+      background: rgba(25, 17, 33, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.4), 
+                  0 0 50px rgba(236, 72, 153, 0.1),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border-radius: 24px;
+      padding: 50px 40px;
+      transform: rotateY(15deg) rotateX(10deg);
+      opacity: 0;
+      animation: revealPerspectiveCard 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Shimmer Effect on Card */
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+      transform: rotate(45deg);
+      animation: glassShimmer 8s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes glassShimmer {
+      0% { transform: translate(-30%, -30%) rotate(45deg); }
+      100% { transform: translate(30%, 30%) rotate(45deg); }
+    }
+
+    @keyframes revealPerspectiveCard {
+      0% {
+        opacity: 0;
+        transform: translateY(80px) rotateY(30deg) rotateX(15deg) scale(0.9);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) rotateY(0) rotateX(0) scale(1);
+      }
+    }
+
+    .message-emoji {
+      font-size: 55px;
+      margin-bottom: 20px;
+      display: inline-block;
+      animation: emojiDance 2.5s ease-in-out infinite;
+    }
+
+    @keyframes emojiDance {
+      0%, 100% { transform: translateY(0) rotate(0); }
+      25% { transform: translateY(-8px) rotate(-10deg) scale(1.05); }
+      75% { transform: translateY(-8px) rotate(10deg) scale(1.05); }
+    }
+
+    .message-title {
+      font-family: var(--font-sans);
+      font-weight: 900;
+      font-size: 38px;
+      background: linear-gradient(135deg, #ff8a00, #da1b60, #ff007f);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 25px;
+      letter-spacing: -0.5px;
+      text-shadow: 0 10px 30px rgba(218, 27, 96, 0.15);
+    }
+
+    .message-content {
+      font-family: var(--font-sans);
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 16px;
+      line-height: 1.8;
+      font-weight: 300;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .message-content p {
+      margin-bottom: 12px;
+    }
+
+    .message-content p.emphasis {
+      color: #ffb7c5;
+      font-weight: 500;
+      font-size: 17px;
+    }
+
+    .message-content p.special {
+      margin-top: 25px;
+      font-weight: 700;
+      font-size: 18px;
+      color: #ff9ebb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .action-row {
+      margin-top: 40px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .btn-festive {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 14px;
+      padding: 14px 20px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-decoration: none;
+    }
+
+    .btn-festive-primary {
+      background: linear-gradient(135deg, #da1b60, #ff007f);
+      color: #ffffff;
+      box-shadow: 0 10px 25px rgba(218, 27, 96, 0.3);
+    }
+
+    .btn-festive-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 30px rgba(218, 27, 96, 0.5);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-festive-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .btn-festive-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+      color: #ffffff;
+    }
+    
+    .btn-festive:active {
+      transform: translateY(1px);
+    }
+
+    /* Floating Mute Button & Info Button */
+    .floating-controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      gap: 10px;
+    }
+
+    .control-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 16px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: scale(1.05);
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 25px;
+      background: rgba(26, 15, 36, 0.95);
+      border: 1px solid rgba(236, 72, 153, 0.3);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 100000;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(236, 72, 153, 0.1);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      .splash-container {
+        padding: 25px 20px;
+      }
+      .splash-title { font-size: 20px; }
+      .terminal-window {
+        height: 380px;
+      }
+      .terminal-body {
+        font-size: 12px;
+        padding: 15px;
+      }
+      .countdown-number {
+        font-size: 70px;
+      }
+      .warning-lbl {
+        font-size: 24px;
+      }
+      .glass-card {
+        padding: 35px 20px;
+      }
+      .message-title {
+        font-size: 28px;
+        margin-bottom: 18px;
+      }
+      .message-content {
+        font-size: 14px;
+      }
+      .action-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-top: 30px;
+      }
+      .glitch-header {
+        font-size: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background Animated Canvas -->
+  <canvas id="backgroundCanvas"></canvas>
+
+  <!-- CRT Visual Filters -->
+  <div id="crtOverlay" class="crt-overlay"></div>
+
+  <!-- Glitch Red Bars Overlay (Dynamic) -->
+  <div id="glitchStripe1" class="glitch-stripe" style="top: 20%;"></div>
+  <div id="glitchStripe2" class="glitch-stripe" style="top: 60%; height: 50px;"></div>
+
+  <!-- Audio Controls -->
+  <div class="floating-controls">
+    <button id="muteBtn" class="control-btn" title="Toggle audio" aria-label="Toggle Audio">🔊</button>
+  </div>
+
+  <!-- App Main Viewport -->
+  <div class="app-viewport">
+
+    <!-- SCENE 0: SPLASH SCREEN (USER OPT-IN) -->
+    <div id="sceneSplash" class="splash-container hidden">
+      <div class="system-badge">CONNECTION GATEWAY</div>
+      <h1 class="splash-title">Decryption Bridge v4.1</h1>
+      <p class="splash-description">
+        Initialize a decrypted link to begin streaming the host validation sequence. Sound and full-screen will optimize the telemetry feed.
+      </p>
+      
+      <div class="options-grid">
+        <label class="checkbox-label">
+          <input type="checkbox" id="checkFullscreen" checked>
+          <span>Enable cinematic Fullscreen mode</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="checkAudio" checked>
+          <span>Enable audio synth effects</span>
+        </label>
+      </div>
+
+      <button id="btnInit" class="cyber-btn">Initialize Connection</button>
+    </div>
+
+    <!-- SCENE 1 & 2: TELEMETRY TERMINAL -->
+    <div id="sceneTerminal" class="terminal-window hidden">
+      <div class="terminal-bar">
+        <div class="terminal-dots">
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+        </div>
+        <div class="terminal-title">HOST CONTEXT MANAGER // SHELL_A</div>
+        <div style="width: 42px;"></div>
+      </div>
+      <div id="terminalBody" class="terminal-body cursor">
+        <!-- Terminal lines will print dynamically here -->
+      </div>
+      <div style="padding: 0 20px 20px 20px;" class="hidden" id="terminalProgressSection">
+        <div class="progress-wrapper">
+          <div class="progress-bar-outer">
+            <div id="progressBar" class="progress-bar-inner"></div>
+          </div>
+          <div class="progress-text">
+            <span>UPSTREAM CLONING SEED</span>
+            <span id="progressPercent">0%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 3: ALERT AND COUNTDOWN -->
+    <div id="sceneCountdown" class="countdown-container hidden">
+      <div class="warning-lbl">SYSTEM WARNING</div>
+      <p class="countdown-sub">FRIENDSHIP DATABASE INTEGRITY DRIFT DETECTED</p>
+      <p class="countdown-detail">Executing emergency restoration protocols...</p>
+      <div id="countdownNumber" class="countdown-number">5</div>
+    </div>
+
+    <!-- SCENE 4: BIG GOT YOU -->
+    <div id="sceneReveal" class="got-you-box hidden">
+      <h1 class="glitch-header">😂 GOT YOU!</h1>
+    </div>
+
+    <!-- SCENE 5: FESTIVE CARDS -->
+    <div id="sceneCelebration" class="celebration-container hidden">
+      <div class="glass-card">
+        <span class="message-emoji">❤️</span>
+        <h1 class="message-title">Happy Friendship Day!</h1>
+        <div class="message-content">
+          <p>Don't worry – absolutely <strong>no virus</strong>, no security breach, and definitely zero download files.</p>
+          <p class="emphasis">Just a mini cyber reminder that you are one of my favorite, most awesome people!</p>
+          <p>Thank you for all the endless laughs, the wonderful memories, and all the lighthearted chaos you bring along.</p>
+          <p class="special">Here's to staying awesome, Bestie! 🤝</p>
+        </div>
+        
+        <div class="action-row">
+          <button id="btnRunAgain" class="btn-festive btn-festive-secondary">Run Again 🔄</button>
+          <button id="btnShare" class="btn-festive btn-festive-primary">Share with a Friend 🔗</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Element -->
+  <div id="toast" class="toast">Link copied! Share it now. 🚀</div>
+
+  <!-- JS SCRIPT FLOW -->
+  <script>
+    /* =========================================================================
+       AUDIO SYSTEM (Procedural Web Audio Synth)
+       ========================================================================= */
+    const audio = {
+      ctx: null,
+      muted: false,
+
+      init() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      },
+
+      playTyping() {
+        if (this.muted || !this.ctx) return;
+        try {
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = 'triangle';
+          // Random tiny pitch variation around 350-700Hz
+          osc.frequency.setValueAtTime(350 + Math.random() * 350, this.ctx.currentTime);
+          
+          gain.gain.setValueAtTime(0.015, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.035);
+          
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.04);
+        } catch (e) {
+          console.warn("Audio play issue: ", e);
+        }
+      },
+
+      playBeep(frequency, duration) {
+        if (this.muted || !this.ctx) return;
+        try {
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(frequency, this.ctx.currentTime);
+          
+          gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {
+          console.warn("Audio play issue: ", e);
+        }
+      },
+
+      playGlitch() {
+        if (this.muted || !this.ctx) return;
+        try {
+          this.init();
+          const duration = 0.45;
+          const bufferSize = this.ctx.sampleRate * duration;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          
+          // Generate customized digital hash white noise
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+          }
+          
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+          
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+          filter.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + duration);
+          filter.Q.setValueAtTime(2.0, this.ctx.currentTime);
+          
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+          
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.ctx.destination);
+          
+          noise.start();
+        } catch (e) {
+          console.warn("Audio play issue: ", e);
+        }
+      },
+
+      playBoom() {
+        if (this.muted || !this.ctx) return;
+        try {
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+          
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 1.2);
+          
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(200, this.ctx.currentTime);
+          
+          gain.gain.setValueAtTime(0.65, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 1.4);
+          
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.ctx.destination);
+          
+          osc.start();
+          osc.stop(this.ctx.currentTime + 1.4);
+        } catch (e) {
+          console.warn("Audio play issue: ", e);
+        }
+      },
+
+      playChime() {
+        if (this.muted || !this.ctx) return;
+        try {
+          this.init();
+          const now = this.ctx.currentTime;
+          // Pentatonic warm chime: C4, Eb4, G4, Bb4, C5, Eb5, G5
+          const notes = [261.63, 311.13, 392.00, 466.16, 523.25, 622.25, 783.99];
+          
+          notes.forEach((freq, idx) => {
+            const delay = idx * 0.12;
+            const time = now + delay;
+            
+            const osc = this.ctx.createOscillator();
+            const modulator = this.ctx.createOscillator();
+            const modGain = this.ctx.createGain();
+            const gain = this.ctx.createGain();
+            
+            // Warm bell synthesis
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, time);
+            
+            modulator.type = 'triangle';
+            modulator.frequency.setValueAtTime(freq * 1.5, time); // FM synthesis harmony
+            modGain.gain.setValueAtTime(freq * 0.1, time);
+            
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.12, time + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.0001, time + 2.8);
+            
+            modulator.connect(modGain);
+            modGain.connect(osc.frequency);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            modulator.start(time);
+            osc.start(time);
+            
+            modulator.stop(time + 3.0);
+            osc.stop(time + 3.0);
+          });
+        } catch (e) {
+          console.warn("Audio play issue: ", e);
+        }
+      }
+    };
+
+    /* =========================================================================
+       CANVAS SYSTEM (Matrix Rain & Celebratory Particles)
+       ========================================================================= */
+    const canvas = document.getElementById('backgroundCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let canvasMode = 'matrix'; // 'matrix' or 'festive'
+    let columns = [];
+    let particles = [];
+    
+    // Resize handler
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      
+      // Reset columns for Matrix rain
+      const fontSize = 16;
+      const count = Math.floor(canvas.width / fontSize);
+      columns = [];
+      for (let i = 0; i < count; i++) {
+        columns.push({
+          y: Math.random() * -100, // Y position
+          speed: 1 + Math.random() * 2, // Falling speed
+          chars: "01ABCDEFGHJKMNPQRSTWXYZ$&#%@+",
+          lastChar: '',
+          fades: []
+        });
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Matrix Rain animation step
+    function drawMatrixRain() {
+      // Semi-transparent black block for trailing effect
+      ctx.fillStyle = 'rgba(11, 12, 16, 0.075)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.font = '15px JetBrains Mono';
+      // If countdown is active, apply orange/red glitched code elements
+      const isRedAlert = (currentScene === 3);
+      ctx.fillStyle = isRedAlert ? 'rgba(255, 51, 51, 0.8)' : 'rgba(0, 255, 102, 0.8)';
+      
+      columns.forEach((col, idx) => {
+        const char = col.chars[Math.floor(Math.random() * col.chars.length)];
+        const x = idx * 16;
+        const y = col.y;
+        
+        // Occasionally write static glitched glyphs horizontally
+        if (Math.random() > 0.99) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(char, x, y);
+          ctx.fillStyle = isRedAlert ? 'rgba(255, 51, 51, 0.8)' : 'rgba(0, 255, 102, 0.8)';
+        } else {
+          ctx.fillText(char, x, y);
+        }
+        
+        col.y += col.speed * 8;
+        
+        // Reset column when it leaves viewport screen
+        if (col.y > canvas.height && Math.random() > 0.975) {
+          col.y = 0;
+          col.speed = 1 + Math.random() * 2;
+        }
+      });
+    }
+
+    // Celebration Festive particle structure
+    class CelebrationParticle {
+      constructor() {
+        this.reset(true);
+      }
+      
+      reset(init = false) {
+        this.x = Math.random() * canvas.width;
+        // Start bottom or spread initially
+        this.y = init ? Math.random() * canvas.height : canvas.height + 20;
+        
+        // Particle Type: 0: Confetti, 1: Hearts, 2: Sparkles
+        this.type = Math.floor(Math.random() * 3);
+        
+        this.size = 5 + Math.random() * 15;
+        this.speedY = -(1 + Math.random() * 3.5); // Rising up
+        this.speedX = -1.2 + Math.random() * 2.4; // Wobbling
+        this.rotation = Math.random() * 360;
+        this.rotationSpeed = -4 + Math.random() * 8;
+        
+        // Beautiful vibrant color options
+        const hues = [0, 320, 280, 40, 200]; // Red/Pink/Purple/Gold/Cyan
+        this.color = `hsl(${hues[Math.floor(Math.random() * hues.length)]}, 100%, ${60 + Math.random() * 20}%)`;
+        this.opacity = 0.5 + Math.random() * 0.5;
+        this.wobbleRange = 1 + Math.random() * 3;
+        this.wobbleSpeed = 0.02 + Math.random() * 0.05;
+        this.wobble = Math.random() * 10;
+      }
+      
+      draw(c) {
+        c.save();
+        c.translate(this.x, this.y);
+        c.rotate((this.rotation * Math.PI) / 180);
+        c.globalAlpha = this.opacity;
+        c.fillStyle = this.color;
+        c.strokeStyle = this.color;
+        
+        if (this.type === 0) {
+          // Draw standard confetti ribbon rectangular shape
+          c.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+        } else if (this.type === 1) {
+          // Draw bezier curve Heart shape
+          c.beginPath();
+          c.moveTo(0, this.size / 4);
+          c.bezierCurveTo(-this.size / 2, -this.size / 2, -this.size, this.size / 3, 0, this.size);
+          c.bezierCurveTo(this.size, this.size / 3, this.size / 2, -this.size / 2, 0, this.size / 4);
+          c.fill();
+        } else {
+          // Draw Sparkle (cross structure)
+          c.lineWidth = 2;
+          c.beginPath();
+          c.moveTo(-this.size, 0); c.lineTo(this.size, 0);
+          c.moveTo(0, -this.size); c.lineTo(0, this.size);
+          c.stroke();
+        }
+        c.restore();
+      }
+      
+      update() {
+        this.y += this.speedY;
+        this.wobble += this.wobbleSpeed;
+        this.x += this.speedX + Math.sin(this.wobble) * 0.6;
+        this.rotation += this.rotationSpeed;
+        
+        // Loop back when going off-screen top
+        if (this.y < -30) {
+          this.reset(false);
+        }
+      }
+    }
+
+    function initFestiveParticles() {
+      particles = [];
+      const density = Math.min(100, Math.floor(canvas.width / 10));
+      for (let i = 0; i < density; i++) {
+        particles.push(new CelebrationParticle());
+      }
+    }
+
+    function drawFestiveScreen() {
+      // Clear with warm overlay gradient simulation
+      ctx.clearRect(0,0, canvas.width, canvas.height);
+      
+      particles.forEach(p => {
+        p.update();
+        p.draw(ctx);
+      });
+    }
+
+    // Engine loop
+    function animationLoop() {
+      if (canvasMode === 'matrix') {
+        drawMatrixRain();
+      } else {
+        drawFestiveScreen();
+      }
+      requestAnimationFrame(animationLoop);
+    }
+    requestAnimationFrame(animationLoop);
+
+    /* =========================================================================
+       SCENE CONTROL ENGINE & TRANSITIONS
+       ========================================================================= */
+    let currentScene = 0; // 0: Splash, 1: Boot, 2: Terminal, 3: Countdown, 4: GotYou, 5: Celebration
+    
+    // UI Elements
+    const sceneSplash = document.getElementById('sceneSplash');
+    const sceneTerminal = document.getElementById('sceneTerminal');
+    const sceneCountdown = document.getElementById('sceneCountdown');
+    const sceneReveal = document.getElementById('sceneReveal');
+    const sceneCelebration = document.getElementById('sceneCelebration');
+    
+    const checkFullscreen = document.getElementById('checkFullscreen');
+    const checkAudio = document.getElementById('checkAudio');
+    const btnInit = document.getElementById('btnInit');
+    const terminalBody = document.getElementById('terminalBody');
+    const terminalProgressSection = document.getElementById('terminalProgressSection');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const countdownNumber = document.getElementById('countdownNumber');
+    const crtOverlay = document.getElementById('crtOverlay');
+    const muteBtn = document.getElementById('muteBtn');
+    
+    const btnRunAgain = document.getElementById('btnRunAgain');
+    const btnShare = document.getElementById('btnShare');
+    
+    // Mouse Glow listener
+    document.addEventListener('mousemove', (e) => {
+      document.documentElement.style.setProperty('--mouse-x', `${e.clientX}px`);
+      document.documentElement.style.setProperty('--mouse-y', `${e.clientY}px`);
+    });
+
+    // Mute/Unmute system toggle
+    muteBtn.addEventListener('click', () => {
+      audio.muted = !audio.muted;
+      muteBtn.innerText = audio.muted ? '🔇' : '🔊';
+    });
+
+    // Automatically start simulation on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      runSequence();
+    });
+
+    // Request fullscreen and initialize Audio Context on the first user interaction
+    const initTelemetryMedia = () => {
+      audio.init();
+      
+      // Try to request fullscreen cinematically on first user click/tap/keydown
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      
+      // Remove listeners so it only triggers once
+      window.removeEventListener('click', initTelemetryMedia);
+      window.removeEventListener('keydown', initTelemetryMedia);
+      window.removeEventListener('touchstart', initTelemetryMedia);
+    };
+
+    window.addEventListener('click', initTelemetryMedia);
+    window.addEventListener('keydown', initTelemetryMedia);
+    window.addEventListener('touchstart', initTelemetryMedia);
+
+    // Share button clipboard copy fallback helper
+    btnShare.addEventListener('click', async () => {
+      const shareUrl = window.location.href;
+      
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Telemetry Connection Terminal',
+            text: 'Initialize a secure decryption tunnel...',
+            url: shareUrl
+          });
+          return;
+        } catch (_) {}
+      }
+      
+      // Failover copy
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        const toast = document.getElementById('toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2500);
+      });
+    });
+
+    // Restart sequences
+    btnRunAgain.addEventListener('click', () => {
+      // Return to boot terminal
+      sceneCelebration.classList.add('hidden');
+      
+      // Reset color tokens
+      document.documentElement.style.setProperty('--bg-color', '#0b0c10');
+      document.documentElement.style.setProperty('--glow-color', 'rgba(0, 255, 102, 0.05)');
+      document.body.style.backgroundImage = 'none';
+      crtOverlay.style.opacity = '0.15';
+      
+      canvasMode = 'matrix';
+      
+      runSequence();
+    });
+
+    // Delay helper
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Typewriter effect lines printing helper
+    function typeText(text, delayMs = 40) {
+      return new Promise(resolve => {
+        const span = document.createElement('div');
+        terminalBody.appendChild(span);
+        terminalBody.scrollTop = terminalBody.scrollHeight;
+        
+        let index = 0;
+        function printChar() {
+          if (index < text.length) {
+            span.innerHTML += text[index];
+            index++;
+            audio.playTyping();
+            setTimeout(printChar, delayMs);
+          } else {
+            resolve();
+          }
+        }
+        printChar();
+      });
+    }
+
+    // Sequence controller
+    async function runSequence() {
+      // Clean terminal first
+      terminalBody.innerHTML = '';
+      progressBar.style.width = '0%';
+      progressPercent.innerText = '0%';
+      terminalProgressSection.classList.add('hidden');
+      
+      // Switch viewports
+      sceneSplash.classList.add('hidden');
+      sceneTerminal.classList.remove('hidden');
+      currentScene = 1; // Boot
+
+      // SCENE 1: Boot Sequence
+      await typeText("Establishing secure connection...", 55);
+      await delay(1200);
+      
+      // Print booting diagnostics
+      terminalBody.innerHTML = '';
+      currentScene = 2; // Terminal Sequence
+
+      await typeText("CORE INTERCEPT VER-82.6 READY.", 30);
+      await typeText("-----------------------------------------------", 15);
+      await delay(400);
+
+      const codes = [
+        "Initializing core subsystems...",
+        "Bypassing host firewall blocks... [VERIFIED]",
+        "Access Granted. System link established.",
+        "Scanning local memories directory...",
+        "Downloading core Friend Database file...",
+      ];
+
+      for (let i = 0; i < codes.length; i++) {
+        await typeText(codes[i], 35);
+        await delay(500);
+      }
+
+      // Display the Progress Bar
+      terminalProgressSection.classList.remove('hidden');
+      audio.playGlitch();
+      
+      // Progress simulation loop
+      for (let p = 0; p <= 100; p += Math.floor(Math.random() * 4) + 1) {
+        const val = Math.min(100, p);
+        progressBar.style.width = `${val}%`;
+        progressPercent.innerText = `${val}%`;
+        
+        // Play soft rhythmic beep while downloading
+        if (val % 10 === 0) {
+          audio.playTyping();
+        }
+        await delay(35 + Math.random() * 50);
+      }
+      
+      progressBar.style.width = `100%`;
+      progressPercent.innerText = `100%`;
+      await delay(500);
+      
+      await typeText("Searching folder hierarchy for embarrassing snapshots...", 35);
+      await delay(800);
+      await typeText("Found 14 matching variables.", 30);
+      await typeText("Uploading friendship telemetry payload... Complete.", 35);
+      await delay(1200);
+
+      // SCENE 3: Critical failure countdown warning
+      sceneTerminal.classList.add('hidden');
+      sceneCountdown.classList.remove('hidden');
+      currentScene = 3; // Countdown
+
+      // Trigger heavy shake on body
+      document.body.classList.add('shake-anim');
+      
+      // Countdown Loop
+      for (let c = 5; c > 0; c--) {
+        countdownNumber.innerText = c;
+        audio.playBeep(440, 0.45); // Standard warning synth beep
+        
+        // Screen flicker/glitch stripes visible during countdown ticks
+        triggerGlitchFlicker();
+        await delay(1000);
+      }
+
+      // SCENE 4: Heavy Glitch Transition
+      document.body.classList.remove('shake-anim');
+      sceneCountdown.classList.add('hidden');
+      sceneReveal.classList.remove('hidden');
+      currentScene = 4; // Reveal Got You
+
+      audio.playBoom(); // Big blast sound
+      audio.playGlitch(); // static burst
+
+      // Glitch visual flashes
+      document.body.style.backgroundColor = '#ff3333';
+      crtOverlay.style.opacity = '0.7';
+      await delay(200);
+      document.body.style.backgroundColor = '#00ff66';
+      await delay(150);
+      document.body.style.backgroundColor = '#0b0c10';
+      crtOverlay.style.opacity = '0.15';
+      
+      await delay(1800); // Hold for 1.8 seconds of fun panic
+
+      // SCENE 5: Warm friendship reveal
+      sceneReveal.classList.add('hidden');
+      sceneCelebration.classList.remove('hidden');
+      currentScene = 5;
+
+      // Transform variables into sweet celebratory colors
+      document.documentElement.style.setProperty('--bg-color', '#1e1428');
+      document.documentElement.style.setProperty('--glow-color', 'rgba(236, 72, 153, 0.15)');
+      
+      // Smooth gradient backplane mapping
+      document.body.style.backgroundImage = 'radial-gradient(circle at 50% 50%, #2b1842 0%, #150921 100%)';
+      crtOverlay.style.opacity = '0.04'; // dim scanlines down
+
+      // Switch background loop to particles (hearts/confetti)
+      canvasMode = 'festive';
+      initFestiveParticles();
+
+      // Play soft gorgeous chime chord arpeggio
+      audio.playChime();
+    }
+
+    // Quick helper to visually strike screen with red stripes
+    function triggerGlitchFlicker() {
+      const gs1 = document.getElementById('glitchStripe1');
+      const gs2 = document.getElementById('glitchStripe2');
+      
+      gs1.style.display = 'block';
+      gs2.style.display = 'block';
+      
+      setTimeout(() => {
+        gs1.style.display = 'none';
+        gs2.style.display = 'none';
+      }, 150);
+    }
+  </script>
+</body>
+</html>
